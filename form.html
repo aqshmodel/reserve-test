@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>予約フォーム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    font-size: 16px;
+  }
+  input, select, textarea, button {
+    font-size: 16px;
+  }
+  textarea {
+    width: 100%;
+    height: 100px;
+  }
+  .form-section {
+    margin-bottom: 20px;
+  }
+  button {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #45a049;
+  }
+  .availability {
+    margin-left: 10px;
+    font-weight: bold;
+    color: #333;
+  }
+  .unavailable {
+    color: red;
+  }
+  #dateOptions label {
+    display: block;
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+  <h1>予約フォーム</h1>
+
+  <p>
+    2025年2月21日〜23日に蔵開きを開催いたします。<br><br>
+    <strong>酒と肴の器2025</strong><br>
+    <strong>期間：</strong>2月21日（金）～23日（日）<br>
+    <strong>会場：</strong>鷲の尾の母屋　八幡平市大更22－158<br>
+    入場無料<br><br>
+    日本酒と、お酒を味わう酒器、蔵見学、そして酒粕や蕎麦など。日本酒を楽しむ3日間です。<br>
+    ご予約は下記のフォームよりお願い申し上げます。<br><br>
+    <img src="https://www.washinoo.co.jp/name.gif"><br>
+    お問い合わせ：0195-76-3211<br>
+    メール：<a href="mailto:sake@washinoo.co.jp">sake@washinoo.co.jp</a>
+  </p>
+<br><br>
+  <form id="bookingForm">
+    <div class="form-section">
+      <label for="date">予約日時:</label><br><br>
+      <div id="dateOptions">
+        <p>予約データを読み込んでいます...</p>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <label for="people">参加人数:</label><br>
+        <select id="people" name="people" required>
+        <option value="" disabled selected> 選択 </option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+        </select><br>
+        <small>※ 参加人数を選択してください</small><br>
+    </div>
+
+    <div class="form-section">
+      <label for="name">代表者様氏名:</label><br>
+      <input type="text" id="name" name="name" required><br>
+    </div>
+
+    <div class="form-section">
+      <label for="phone">電話番号:</label><br>
+      <input type="tel" id="phone" name="phone" pattern="[0-9]{10,11}" required><br>
+      <small>※ ハイフンなしで入力してください</small><br><br>
+
+      <label for="email">メールアドレス:</label><br>
+      <input type="email" id="email" name="email"><br>
+      <small>※ ご予約確認の自動返信メールが届きます。入力を省略することもできます。</small><br><br>
+    </div>
+
+    <div class="form-section">
+      <label for="remarks">ご要望・ご質問:</label><br>
+      <textarea id="remarks" name="remarks" placeholder="ご要望やご質問がございましたらご記入ください"></textarea><br>
+    </div>
+
+    <p class="error" id="error" style="color:red;"></p>
+    <button type="submit">予約する</button>
+    <br>
+    <small>※ 予約が完了しましたらメッセージが表示されます。</small><br>
+    <p id="successMessage" style="font-size: 18px; color: green; margin-top: 20px;"></p><br>
+    <br><br><br><br><br><br><br><br>
+  </form>
+
+<script>
+  const scriptUrl = 'https://script.google.com/macros/s/あなたのデプロイしたスクリプトURLをここに貼り付け/exec'; // あなたがデプロイした正しいスクリプトURLを設定
+
+  async function fetchAvailability() {
+    try {
+      const response = await fetch(scriptUrl);
+      if (!response.ok) {
+        throw new Error(`HTTPエラー: ${response.status}`);
+      }
+      const result = await response.json();
+      if (result.status === "success") {
+        displayDateOptions(result.availableDates);
+      } else {
+        document.getElementById('dateOptions').innerHTML = "<p>データの取得に失敗しました。</p>";
+      }
+    } catch (error) {
+      console.error("エラー:", error.message);
+      document.getElementById('dateOptions').innerHTML = `<p>エラーが発生しました: ${error.message}</p>`;
+    }
+  }
+
+  function displayDateOptions(dates) {
+    const container = document.getElementById('dateOptions');
+    container.innerHTML = "";
+
+    dates.forEach(dateInfo => {
+      const label = document.createElement('label');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'date';
+      radio.value = dateInfo.date;
+      radio.required = true;
+
+      const text = document.createTextNode(` ${dateInfo.date}`);
+      const availability = document.createElement('span');
+      availability.classList.add('availability');
+
+      if (dateInfo.remaining > 0) {
+        availability.textContent = ` (残り${dateInfo.remaining}名)`;
+      } else {
+        availability.textContent = " (満席)";
+        availability.classList.add('unavailable');
+        radio.disabled = true;
+      }
+
+      label.appendChild(radio);
+      label.appendChild(text);
+      label.appendChild(availability);
+      container.appendChild(label);
+      container.appendChild(document.createElement('br'));
+    });
+  }
+
+  document.getElementById('bookingForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    const dateRadio = document.querySelector('input[name="date"]:checked');
+    if (!dateRadio) {
+      document.getElementById('error').textContent = "予約日時を選択してください。";
+      return;
+    }
+
+    const date = dateRadio.value;
+    const people = document.getElementById('people').value;
+    const name = document.getElementById('name').value;
+    const phone = document.getElementById('phone').value;
+    const email = document.getElementById('email').value;
+    const remarks = document.getElementById('remarks').value;
+
+    const params = new URLSearchParams();
+    params.append("date", date);
+    params.append("people", people);
+    params.append("name", name);
+    params.append("phone", phone);
+    params.append("email", email);
+    params.append("remarks", remarks);
+
+    try {
+      const response = await fetch(scriptUrl, {
+        method: 'POST',
+        body: params
+      });
+
+      const result = await response.json();
+
+      if (result.status === "success") {
+        document.getElementById('successMessage').innerHTML = `
+  <p>
+    <strong>予約が完了いたしました。</strong><br>
+    予約内容は以下の通りです：<br>
+    <ul>
+      <li><strong>予約日時：</strong>${date}</li>
+      <li><strong>予約人数：</strong>${people}名</li>
+      <li><strong>代表者様氏名：</strong>${name}</li>
+    </ul>
+    メールアドレスを入力いただいた方へは自動返信メールが送信されていますので、内容をご確認ください。<br>
+    わしの尾公式Webサイトも是非ご覧くださいませ。<br>
+    ${name}様のお越しをお待ちしております。<br><br><br>
+    <img src="https://www.washinoo.co.jp/name.gif"><br>
+    <a href="https://www.washinoo.co.jp/">https://www.washinoo.co.jp/</a><br>
+    岩手県八幡平市大更第22地割158番地<br>
+    TEL 0195-76-3211<br>
+    mail  <a href="mailto:sake@washinoo.co.jp">sake@washinoo.co.jp</a><br>
+  </p>
+`;
+      } else {
+        document.getElementById('error').textContent = result.message;
+      }
+    } catch (error) {
+      console.error("エラー:", error);
+      document.getElementById('error').textContent = "送信エラーが発生しました。";
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', fetchAvailability);
+</script>
+</body>
+</html>

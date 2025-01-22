@@ -1,0 +1,189 @@
+// POSTリクエスト処理（エントリーポイント）
+function doPost(e) {
+  try {
+    // リクエストのパラメータを取得
+    const params = e.parameter;
+
+    // 必須フィールドのチェック（メールアドレスとご要望・ご質問は任意）
+    if (!params.date || !params.people || !params.name || !params.phone) {
+      throw new Error("必須入力の情報が不足しています");
+    }
+
+    const SHEET = SpreadsheetApp.openById('あなたのスプレッドシートIDをここに貼り付け').getSheetByName('シート名をここに貼り付け');　// スプレッドシートIDとシート名を貼り付け
+    const timestamp = new Date();
+    const requestedDate = params.date;
+    const requestedPeople = parseInt(params.people, 10);
+
+    // 定員をチェック
+    const existingReservations = SHEET.getDataRange().getValues().filter(row => row[1] === requestedDate); // 予約日時列をチェック
+    const totalPeople = existingReservations.reduce((sum, row) => sum + parseInt(row[2] || 0, 10), 0); // 人数列を合計
+    const remainingCapacity = 10 - totalPeople;
+
+    if (remainingCapacity < requestedPeople) {
+      // 定員オーバーの場合のレスポンス
+      const availableDates = getAvailableDates(SHEET);
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          status: "error",
+          message: `申し訳ございません。「${requestedDate}」は定員を超えるため、予約できません。現在の空き状況をご確認の上、再度お申し込みください。`,
+          availableDates: availableDates
+        })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 定員内なら予約を記録
+    SHEET.appendRow([
+      timestamp,              // タイムスタンプ
+      requestedDate,          // 予約日時
+      requestedPeople,        // 人数
+      params.name,            // 名前
+      `'${params.phone}`,     // 電話番号（先頭のゼロを保持するため、文字列として扱う）
+      params.email || "",     // メールアドレス（未入力の場合は空文字列）
+      params.remarks || ""    // ご要望・ご質問（未入力の場合は空文字列）
+    ]);
+
+    sortSheetByDate(SHEET); // データを並べ替え
+
+    // メールアドレスがある場合に自動返信メールを送信
+    if (params.email) {
+      sendConfirmationEmail(params.email, params.name, requestedDate, requestedPeople, params.remarks);
+    }
+
+    // 管理者に通知メールを送信
+    sendAdminNotification(params.name, requestedPeople, params.phone, params.email, params.remarks, requestedDate);
+
+    // 成功レスポンスを返す
+    return ContentService.createTextOutput(
+      JSON.stringify({ status: "success", message: "予約が完了しました。", data: params })
+    ).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    // エラーが発生した場合、エラーレスポンスを返す
+    return ContentService.createTextOutput(
+      JSON.stringify({ status: "error", message: error.message })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// 自動返信メールを送信
+function sendConfirmationEmail(email, name, date, people, remarks) {
+  const subject = "【予約確認】「酒と肴の器」ご予約が完了しました";
+  const body = `
+${name}様
+
+この度は「酒と肴の器」の蔵見学にお申し込みいただき誠にありがとうございます。
+以下の内容でご予約を承りました。
+
+ご予約日時: ${date}
+人数: ${people}名
+ご要望・ご質問: ${remarks || "未入力"}
+
+${name}様のお越しをお待ちしております。
+何かご不明な点や、ご予定に変更がございましたら下記までご連絡いただけますと幸いです。
+尚、こちらのメールはご予約者様への自動返信専用アドレスとなっておりますので、メールでのお問い合わせの際は sake@washinoo.co.jp へお願い申し上げます。
+
+株式会社わしの尾
+https://www.washinoo.co.jp/
+岩手県八幡平市大更第22地割158番地
+TEL 0195-76-3211
+mail  sake@washinoo.co.jp
+  `;
+
+  // Gmailでメールを送信
+  GmailApp.sendEmail(email, subject, body);
+}
+
+// 管理者通知メールを送信
+function sendAdminNotification(name, people, phone, email, remarks, date) {
+  const adminEmail = "管理者のGmailアドレスをここに貼り付け@gmail.com";　//管理者のGmailアドレスをここに貼り付け
+  const subject = "【通知】「酒と肴の器」新しい予約が入りました";
+  const body = `
+株式会社わしの尾
+管理者様
+
+「酒と肴の器」蔵見学に新しい予約が入りました。以下の内容をご確認ください。
+
+申込者氏名: ${name}
+人数: ${people}名
+連絡先: ${phone}
+メールアドレス: ${email || "未入力"}
+ご要望・ご質問: ${remarks || "未入力"}
+予約日時: ${date}
+
+詳細はスプレッドシートをご確認ください。
+https://docs.google.com/spreadsheets/d/1ySbKnbNPMARAE-q5Q6WqazQTTx_CA6PeSrdjxBDnLj8/edit?pli=1&gid=0#gid=0
+  `;
+
+  // Gmailでメールを送信
+  GmailApp.sendEmail(adminEmail, subject, body);
+}
+
+// GETリクエスト処理（予約状況を取得）
+function doGet(e) {
+  try {
+    const SHEET = SpreadsheetApp.openById('1LQ_gqop4tX5FNw9SuwB_SZ-7criTbeE2_IJ1YYO_qZc').getSheetByName('申込者一覧');
+
+    sortSheetByDate(SHEET); // データを並べ替え
+
+    // 現在の予約可能日時を取得
+    const availableDates = getAvailableDates(SHEET);
+
+    // 成功レスポンスを返す
+    return ContentService.createTextOutput(
+      JSON.stringify({ status: "success", availableDates: availableDates })
+    ).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    // エラーが発生した場合のレスポンス
+    return ContentService.createTextOutput(
+      JSON.stringify({ status: "error", message: error.message })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// スプレッドシートから予約可能日時を取得
+function getAvailableDates(sheet) {
+  const allDates = [
+    "2月21日（金）11時30分〜",
+    "2月21日（金）13時00分〜",
+    "2月21日（金）14時00分〜",
+    "2月22日（土）11時30分〜",
+    "2月22日（土）13時00分〜",
+    "2月22日（土）14時00分〜",
+    "2月23日（日）11時30分〜",
+    "2月23日（日）13時00分〜",
+    "2月23日（日）14時00分〜"
+  ];
+
+  const reservations = sheet.getDataRange().getValues();
+  const availability = {};
+
+  // 予約人数を集計
+  allDates.forEach(date => {
+    availability[date] = 10; // 初期値は10名分
+  });
+  reservations.forEach(row => {
+    const date = row[1]; // 予約日時列
+    const people = parseInt(row[2] || 0, 10); // 人数列
+    if (availability[date] !== undefined) {
+      availability[date] -= people; // 残り定員を計算
+    }
+  });
+
+  // 全ての日時の残り定員を返す
+  return allDates.map(date => ({
+    date: date,
+    remaining: availability[date]
+  }));
+}
+
+// スプレッドシートのデータをB列をキーに並べ替え
+function sortSheetByDate(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    // データが1行もない、またはヘッダーのみの場合は処理をスキップ
+    return;
+  }
+  const range = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()); // 1行目を除外
+  range.sort({ column: 2, ascending: true }); // B列（2列目）で昇順に並べ替え
+}
