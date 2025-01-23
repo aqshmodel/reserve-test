@@ -1,3 +1,7 @@
+const SHEET_ID = 'あなたのスプレッドシートIDをここに貼り付け'; //スプレッドシートIDを貼り付けないと動きません！
+const SHEET_NAME = 'あなたのシート名をここに貼り付け';　//シート名を貼り付けないと動きません！
+const SHEET = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+
 // POSTリクエスト処理（エントリーポイント）
 function doPost(e) {
   try {
@@ -9,14 +13,14 @@ function doPost(e) {
       throw new Error("必須入力の情報が不足しています");
     }
 
-    const SHEET = SpreadsheetApp.openById('あなたのスプレッドシートIDをここに貼り付け').getSheetByName('シート名をここに貼り付け');　// スプレッドシートIDとシート名を貼り付け
     const timestamp = new Date();
     const requestedDate = params.date;
     const requestedPeople = parseInt(params.people, 10);
 
     // 定員をチェック
-    const existingReservations = SHEET.getDataRange().getValues().filter(row => row[1] === requestedDate); // 予約日時列をチェック
-    const totalPeople = existingReservations.reduce((sum, row) => sum + parseInt(row[2] || 0, 10), 0); // 人数列を合計
+    const reservationData = SHEET.getRange(2, 2, SHEET.getLastRow() - 1, 2).getValues(); // B列とC列のみ取得
+    const existingReservations = reservationData.filter(row => row[0] === requestedDate); // 予約日時列は row[0]
+    const totalPeople = existingReservations.reduce((sum, row) => sum + parseInt(row[1] || 0, 10), 0); // 人数列は row[1]
     const remainingCapacity = 10 - totalPeople;
 
     if (remainingCapacity < requestedPeople) {
@@ -95,7 +99,7 @@ mail  sake@washinoo.co.jp
 
 // 管理者通知メールを送信
 function sendAdminNotification(name, people, phone, email, remarks, date) {
-  const adminEmail = "管理者のGmailアドレスをここに貼り付け@gmail.com";　//管理者のGmailアドレスをここに貼り付け
+  const adminEmail = "aqsh.reprom@gmail.com";
   const subject = "【通知】「酒と肴の器」新しい予約が入りました";
   const body = `
 株式会社わしの尾
@@ -111,7 +115,7 @@ function sendAdminNotification(name, people, phone, email, remarks, date) {
 予約日時: ${date}
 
 詳細はスプレッドシートをご確認ください。
-https://docs.google.com/spreadsheets/d/1ySbKnbNPMARAE-q5Q6WqazQTTx_CA6PeSrdjxBDnLj8/edit?pli=1&gid=0#gid=0
+https://docs.google.com/spreadsheets/d/1LQ_gqop4tX5FNw9SuwB_SZ-7criTbeE2_IJ1YYO_qZc/edit?usp=sharing
   `;
 
   // Gmailでメールを送信
@@ -121,10 +125,6 @@ https://docs.google.com/spreadsheets/d/1ySbKnbNPMARAE-q5Q6WqazQTTx_CA6PeSrdjxBDn
 // GETリクエスト処理（予約状況を取得）
 function doGet(e) {
   try {
-    const SHEET = SpreadsheetApp.openById('1LQ_gqop4tX5FNw9SuwB_SZ-7criTbeE2_IJ1YYO_qZc').getSheetByName('申込者一覧');
-
-    sortSheetByDate(SHEET); // データを並べ替え
-
     // 現在の予約可能日時を取得
     const availableDates = getAvailableDates(SHEET);
 
@@ -155,16 +155,16 @@ function getAvailableDates(sheet) {
     "2月23日（日）14時00分〜"
   ];
 
-  const reservations = sheet.getDataRange().getValues();
+  const reservationData = sheet.getRange(2, 2, sheet.getLastRow() - 1, 2).getValues(); // B列とC列のみ取得
   const availability = {};
 
   // 予約人数を集計
   allDates.forEach(date => {
     availability[date] = 10; // 初期値は10名分
   });
-  reservations.forEach(row => {
-    const date = row[1]; // 予約日時列
-    const people = parseInt(row[2] || 0, 10); // 人数列
+  reservationData.forEach(row => {
+    const date = row[0]; // 予約日時列は row[0]
+    const people = parseInt(row[1] || 0, 10); // 人数列は row[1]
     if (availability[date] !== undefined) {
       availability[date] -= people; // 残り定員を計算
     }
