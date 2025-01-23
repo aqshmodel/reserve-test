@@ -115,7 +115,7 @@ function sendAdminNotification(name, people, phone, email, remarks, date) {
 予約日時: ${date}
 
 詳細はスプレッドシートをご確認ください。
-https://docs.google.com/spreadsheets/d/1LQ_gqop4tX5FNw9SuwB_SZ-7criTbeE2_IJ1YYO_qZc/edit?usp=sharing
+https://docs.google.com/spreadsheets/d/1ySbKnbNPMARAE-q5Q6WqazQTTx_CA6PeSrdjxBDnLj8/edit?usp=sharing
   `;
 
   // Gmailでメールを送信
